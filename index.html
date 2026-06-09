@@ -151,7 +151,10 @@ h1{font-size:20px;font-weight:500;margin-bottom:4px}
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px">
           <p class="section-title" style="margin:0">Resumo mensal</p>
-          <select class="mes-select" id="mes-select" onchange="renderResumo()"></select>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-sair" style="text-decoration:none;border:1px solid #ddd;border-radius:8px;padding:6px 12px;color:#666" onclick="atualizarResumo()">↻ Atualizar</button>
+            <select class="mes-select" id="mes-select" onchange="renderResumo()"></select>
+          </div>
         </div>
         <div id="resumo-content"></div>
       </div>
@@ -213,9 +216,17 @@ var MEDICOS_PADRAO=['Angela','Anthony','Taíse','Liege','Lucas','Gabriel','Rafae
 var FERIADOS=["2025-01-01","2025-04-18","2025-04-19","2025-04-21","2025-05-01","2025-06-19","2025-09-07","2025-10-12","2025-11-02","2025-11-15","2025-11-20","2025-12-25","2026-01-01","2026-04-03","2026-04-04","2026-04-21","2026-05-01","2026-06-04","2026-09-07","2026-10-12","2026-11-02","2026-11-15","2026-11-20","2026-12-25"];
 var FERIADOS_NOMES={"2025-01-01":"Confraternização Universal","2025-04-18":"Sexta-feira Santa","2025-04-19":"Páscoa","2025-04-21":"Tiradentes","2025-05-01":"Dia do Trabalho","2025-06-19":"Corpus Christi","2025-09-07":"Independência","2025-10-12":"Nossa Senhora Aparecida","2025-11-02":"Finados","2025-11-15":"Proclamação da República","2025-11-20":"Consciência Negra","2025-12-25":"Natal","2026-01-01":"Confraternização Universal","2026-04-03":"Sexta-feira Santa","2026-04-04":"Páscoa","2026-04-21":"Tiradentes","2026-05-01":"Dia do Trabalho","2026-06-04":"Corpus Christi","2026-09-07":"Independência","2026-10-12":"Nossa Senhora Aparecida","2026-11-02":"Finados","2026-11-15":"Proclamação da República","2026-11-20":"Consciência Negra","2026-12-25":"Natal"};
 
-var registros=JSON.parse(localStorage.getItem('plantoes')||'[]');
+var registros=[];
 var medicos=MEDICOS_PADRAO.slice();
 var turnosSel=0,procsAtivos={},admAutenticado=false;
+
+async function carregarRegistros(){
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=getRegistros');
+    var d=await r.json();
+    registros=(d.registros||[]);
+  }catch(e){registros=[];}
+}
 
 async function carregarMedicos(){
   try{
@@ -300,7 +311,6 @@ async function registrar(){
   var btn=document.getElementById('btn-reg');btn.disabled=true;btn.textContent='Enviando...';
   try{
     await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(reg)});
-    registros.push(reg);localStorage.setItem('plantoes',JSON.stringify(registros));
     showToast('Plantão de '+med+' registrado!','ok');resetForm();
   }catch(e){showToast('Erro ao enviar. Verifique a conexão.','erro');}
   btn.disabled=false;btn.textContent='Registrar plantão';
@@ -319,21 +329,29 @@ function showToast(msg,tipo){
   t.className='toast '+(tipo==='ok'?'ok':'erro')+' show';setTimeout(function(){t.classList.remove('show');},4000);
 }
 
-function showTab(id,e){
+async function showTab(id,e){
   document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   document.getElementById('tab-'+id).classList.add('active');e.target.classList.add('active');
-  if(id==='admin'&&admAutenticado){renderMesSelect();renderResumo();}
+  if(id==='admin'&&admAutenticado){
+    document.getElementById('resumo-content').innerHTML='<div class="empty-state">Carregando dados da planilha...</div>';
+    await carregarRegistros();
+    renderMesSelect();renderResumo();
+  }
   if(id==='config'&&admAutenticado){renderListaMedicos();renderFeriados();}
 }
 
-function checkSenha(area){
+async function checkSenha(area){
   var inp=document.getElementById('senha-'+area),erro=document.getElementById('erro-'+area);
   if(inp.value===SENHA){
     admAutenticado=true;
     document.getElementById('lock-'+area).style.display='none';
     document.getElementById('conteudo-'+area).style.display='block';
-    if(area==='admin'){renderMesSelect();renderResumo();}
+    if(area==='admin'){
+      document.getElementById('resumo-content').innerHTML='<div class="empty-state">Carregando dados da planilha...</div>';
+      await carregarRegistros();
+      renderMesSelect();renderResumo();
+    }
     if(area==='config'){renderListaMedicos();renderFeriados();}
     erro.textContent='';inp.value='';
   }else{
@@ -348,6 +366,12 @@ function sair(){
   document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   document.getElementById('tab-registro').classList.add('active');document.querySelector('.tab').classList.add('active');
+}
+
+async function atualizarResumo(){
+  document.getElementById('resumo-content').innerHTML='<div class="empty-state">Carregando dados da planilha...</div>';
+  await carregarRegistros();
+  renderMesSelect();renderResumo();
 }
 
 function fmt(n){return'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2});}
